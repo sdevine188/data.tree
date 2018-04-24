@@ -4,13 +4,19 @@ library(DiagrammeR)
 library(yaml)
 library(rpart)
 library(rpart.plot)
+library(stringr)
+library(dplyr)
+library(purrr)
+library(rlang)
+library(tibble)
+library(tidyr)
 
 # https://cran.r-project.org/web/packages/data.tree/vignettes/data.tree.html
 # http://rich-iannone.github.io/DiagrammeR/graphviz_and_mermaid.html#graphviz-layouts
 # https://cran.r-project.org/web/packages/data.tree/vignettes/applications.html
 
 # setwd
-setwd("H:/R/data.tree")
+setwd("C:/Users/Stephen/Desktop/R/data.tree")
 
 # get data
 data(GNI2014)
@@ -44,6 +50,11 @@ glimpse(as.data.frame(population))
 # climb tree
 population$`North America`
 
+# plot
+# doesn't plot for some reason?? too big??
+population
+plot(population)
+
 
 #######################################################
 
@@ -58,6 +69,9 @@ GNI2014_v2
 # convert to node
 population_v2 <- as.Node(GNI2014_v2)
 population_v2
+
+# plot
+plot(population_v2)
 
 
 #######################################################
@@ -196,10 +210,10 @@ rpart.plot(mtcars_rpart, extra = 104, nn = TRUE)
 
 
 # reshape mtcars_rpart 
-head(GNI2014)
-glimpse(GNI2014)
-GNI2014$pathString <- paste("world", GNI2014$continent, GNI2014$country, sep = "/")
-glimpse(GNI2014)
+# head(GNI2014)
+# glimpse(GNI2014)
+# GNI2014$pathString <- paste("world", GNI2014$continent, GNI2014$country, sep = "/")
+# glimpse(GNI2014)
 
 # get clean model output of stats for each node
 mtcars_rpart_output <- mtcars_rpart$frame
@@ -243,11 +257,38 @@ mtcars_rpart_output
 
 ######################################################
 
-
+tree_output <- mtcars_rpart_output
 # create get_hierarchy_from_node_path function
-get_hierarchy_from_node_path <- function(df) {
+get_hierarchy_from_node_path <- function(tree_output) {
+        # find max tree depth to know how many placeholder columns you need to build pathString of hierarchy 
+        max_tree_depth <- max(tree_output$tree_depth)
         
+        # create placeholder variable names for the hierarchy
+        node_level_var_names <- unlist(map(.x = 1:max_tree_depth, .f = ~ str_c("node_level_", .x)))
+        # node_level_var_names_syms <- syms(node_level_var_names)
+
+        # create placeholder variable vectors for the hierarchy
+        total_obs <- tree_output %>% filter(var_to_be_split_next == "<leaf>") %>% summarize(total_obs = sum(obs_in_node)) %>%
+                pull(total_obs)
+        node_level_vectors <- map(.x = 1:max_tree_depth, .f = ~ rep(NA, times = total_obs))
+        
+        # create placeholder variables for the hierarchy
+        create_tbl <- function(.x, .y, ...){
+                node_level_var_name_sym <- sym(.x)
+                tibble(!!node_level_var_name_sym := .y)
+        }
+        node_level_data <- map2(.x = node_level_var_names, .y = node_level_vectors, .f = create_tbl) %>% bind_cols(.)
+        
+        # map over terminal nodes, split apart node_path to get each terminal nodes list of node_level hierarchy values
+        # then create function that takes a row as input, and then turns the row's terminal_node value into a sym,
+        # then uses the terminal_node_sym to assign the corresponding node_level hierarchy values to row w mutate_at
+        
+        tree_output %>% distinct(var_to_be_split_next, terminal_node, node_path)
+        tree_output %>% filter(var_to_be_split_next == "<leaf>") %>% group_by(terminal_node) %>%
+                nest() %>% pmap_dfr(.l = ., .f = )
 }
+
+
 
 
 
@@ -259,8 +300,8 @@ get_hierarchy_from_node_path <- function(df) {
 # GNI2014_v2 <- GNI2014 %>% mutate(country = case_when(country %in% c("Bermuda", "Norway", "Qatar", "United States") ~ NA_character_, TRUE ~ country),
 #                                  country = ifelse(is.na(country), "", country),
 #                                  pathString = str_c("world", continent, country, sep = "/")) %>% slice(1:10)
-
-
+# head(GNI2014_v2)
+# head(GNI2014)
 
 
 
